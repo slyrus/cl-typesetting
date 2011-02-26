@@ -23,25 +23,39 @@
 (defun hrule (&rest args)
   (add-box (apply 'make-instance 'hrule args)))
 
-(defclass jpeg-box (soft-box)
+(defclass image-box (soft-box)
   ((file :accessor file :initform nil :initarg :file)
-   (pdf-jpeg-obj :accessor pdf-jpeg-obj :initform nil :initarg :pdf-jpeg-obj)))
+   (pdf-image-obj :accessor pdf-image-obj :initform nil :initarg :pdf-image-obj)))
 
-(defun image (&rest args &key inline &allow-other-keys)
-  (if inline
-      (add-box (apply 'make-instance 'jpeg-box :allow-other-keys t args))
-      (let ((hbox (make-instance 'hbox :boxes (list (make-hfill-glue)
-						    (apply 'make-instance 'jpeg-box :allow-other-keys t args)
-						    (make-hfill-glue))
-				 :adjustable-p t)))
-	(compute-natural-box-size hbox)
-	(add-box hbox))))
-
+(defclass jpeg-box (image-box) () )
 (defmethod stroke ((box jpeg-box) x y)
-  (unless (pdf-jpeg-obj box)
-    (setf (pdf-jpeg-obj box) (pdf:make-jpeg-image (pdf:read-jpeg-file (file box)))))
-  (pdf:add-images-to-page (pdf-jpeg-obj box))
-  (pdf:draw-image (pdf-jpeg-obj box) x (+ (- y (dy box))(offset box))(dx box)(dy box) 0 t))
+  (unless (pdf-image-obj box)
+    (setf (pdf-image-obj box) (pdf:make-jpeg-image (pdf:read-jpeg-file (file box)))))
+  (pdf:add-images-to-page (pdf-image-obj box))
+  (pdf:draw-image (pdf-image-obj box) x (+ (- y (dy box))(offset box))(dx box)(dy box) 0 t))
+
+(defclass png-box (image-box) () )
+(defmethod stroke ((box png-box) x y)
+  (unless (pdf-image-obj box)
+    (setf (pdf-image-obj box) (pdf:make-png-image (pdf:read-png-file (file box)))))
+  (pdf:add-images-to-page (pdf-image-obj box))
+  (pdf:draw-image (pdf-image-obj box) x (+ (- y (dy box))(offset box))(dx box)(dy box) 0 t))
+
+(defun image (&rest args &key inline (image-type :jpeg) &allow-other-keys)
+  (let ((image-class (case image-type
+                       (:png 'png-box)
+                       (t 'jpeg-box))))
+    (if inline
+        (add-box (apply 'make-instance image-class :allow-other-keys t args))
+        (let ((hbox (make-instance
+                     'hbox :boxes
+                     (list (make-hfill-glue)
+                           (apply 'make-instance image-class :allow-other-keys t args)
+                           (make-hfill-glue))
+                     :adjustable-p t)))
+          (compute-natural-box-size hbox)
+          (add-box hbox)))))
+
 
 (defclass background-jpeg-box (jpeg-box)
   ((x0 :accessor x0 :initarg :x0)
